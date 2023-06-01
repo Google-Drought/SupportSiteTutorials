@@ -1,0 +1,166 @@
+---
+title: "Tutorial for using Climate Engine Time-series API"
+date: "May 31, 2023"
+output: html_document
+description: "Tutorial for using Climate Engine Time-series API"
+---
+
+```{r setup, message = FALSE}
+library(tidyverse) # Data processing and visualization
+library(httr) # HTTP API requests
+library(httr2) # HTTP API requests
+library(DT) # Formatting data tables
+```
+
+## Preliminary test
+
+Define Climate Engine API key and run simple endpoint to get key expiration to ensure that the key authenticated correctly.
+
+```{r test}
+# Define root url for Climate Engine API
+root_url <- 'https://api.climateengine.org/'
+
+# Define key
+key = 'key_here'
+
+# Define endpoint
+endpoint = '/home/key_expiration'
+
+# Run simple endpoint to get key expiration
+test_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = key))
+print(content(test_r, "text",  encoding = "ISO-8859-1"))
+```
+
+## Get time-series data
+
+Get time-series data for the GridMET Long-term Drought Blend. 
+
+Learn more about this API endpoint here: https://docs.climateengine.com/docs/build/html/timeseries.html#timeseries-native-points
+
+Learn more about drought blends here: https://www.drought.gov/data-maps-tools/multi-indicator-drought-index-midi
+
+```{r request-ltb}
+# Define endpoint for initial data request
+endpoint <- "/timeseries/native/points"
+
+# Define API arguments time-series endpoint to get long-term blend data 
+ltb_query <- list(dataset = 'GRIDMET_DROUGHT',
+variable = "long_term_blend",
+start_date = '2000-01-01',
+end_date = '2022-12-31',
+coordinates = '[[-121.98,39.03]]',
+area_reducer = 'mean')
+
+# Run GET request to get data
+ltb_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = key), query = ltb_query)
+print(ltb_r)
+```
+
+A status code of 200 indicates that the data was returned successfully. In the next step, we'll unpack the JSON that was returned from the API and convert it to a data frame.
+
+## Parse time-series data
+
+Parse time-series of the long-term blend drought data from GridMET DROUGHT from a JSON to data frame
+
+```{r parse-ltb}
+# Parse JSON returned from API
+ltb_r_parse <- content(ltb_r, "parsed")
+ltb_df <- enframe(unlist(ltb_r_parse[[1]]$Data))
+ltb_cols <- ltb_df$name %>% unique()
+
+# Define simple function to iterate over "name" values in parsed dataframe and return single column dataframe with those values
+generate_data_frame <- function(col, df){
+
+  # Filter for name from parsed API return
+  df_val <- df %>%
+    filter(name == col)
+
+  # Create output data frame based on name from parsed API return
+  out_df <- tibble(val = df_val$value)
+
+  # Provide names from parsed API return as column name
+  colnames(out_df) <- c(col)
+
+  return(out_df)
+}
+
+# Map generate_data_frame over list of columns and clean up resulting data frame
+ltb_r_df <- map(ltb_cols, generate_data_frame, ltb_df) %>%
+  bind_cols() %>%
+  mutate(Date = as.Date(Date),
+         Value = as.numeric(long_term_blend),
+         Variable = "long_term_blend") %>%
+  filter(Value > -10) %>%
+  select(-long_term_blend)
+datatable(ltb_r_df)
+```
+
+
+## Visualize time-series data
+Make a simple plot of the time-series data
+
+```{r visualize-ltb}
+# Make a simple plot of the time-series data
+ggplot(data = ltb_r_df)+
+  geom_line(mapping = aes(x = Date, y = Value))+
+  theme_minimal()
+```
+
+
+## Get and parse additional time-series data
+
+Get time-series data for the GridMET Short-term Drought Blend. 
+
+Learn more about this API endpoint here: https://docs.climateengine.com/docs/build/html/timeseries.html#timeseries-native-points
+
+Learn more about drought blends here: https://www.drought.gov/data-maps-tools/multi-indicator-drought-index-midi
+
+```{r request-stb}
+# Define endpoint for initial data request
+endpoint <- "/timeseries/native/points"
+
+# Define API arguments time-series endpoint to get long-term blend data 
+stb_query <- list(dataset = 'GRIDMET_DROUGHT',
+variable = "short_term_blend",
+start_date = '2000-01-01',
+end_date = '2022-12-31',
+coordinates = '[[-121.98,39.03]]',
+area_reducer = 'mean')
+
+# Run GET request to get data
+stb_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = key), query = stb_query)
+
+# Parse JSON returned from API
+stb_r_parse <- content(stb_r, "parsed")
+stb_df <- enframe(unlist(stb_r_parse[[1]]$Data))
+stb_cols <- stb_df$name %>% unique()
+
+# Map generate_data_frame over list of columns and clean up resulting data frame
+stb_r_df <- map(stb_cols, generate_data_frame, stb_df) %>%
+  bind_cols() %>%
+  mutate(Date = as.Date(Date),
+         Value = as.numeric(short_term_blend),
+         Variable = "short_term_blend") %>%
+  filter(Value > -10)
+datatable(stb_r_df)
+```
+
+
+## Visualize short-term and long-term blend time-series data
+
+Combine long-term and short-term blend time-series to plot them on the same graph
+
+```{r visualize-blends, exercise = TRUE, exercise.setup = "request-stb"}
+# ----- Bind rows of stb and ltb data frames -----
+stb_ltb_r_df <- bind_rows(stb_r_df, ltb_r_df) %>%
+  mutate(Variable = ifelse(Variable == 'long_term_blend', 'Long-term blend', 'Short-term blend'))
+
+# ----- Make a simple plot of the time-series data ----- 
+ggplot(data = stb_ltb_r_df)+
+  geom_line(mapping = aes(x = Date, y = Value, color = Variable), size = 0.3)+
+  labs(title = "Long-term vs Short-term Drought Blends, GridMET Drought (2000-2023)") +
+  theme_minimal()+
+  theme(legend.position="bottom",
+        axis.title.x = element_blank(),
+        legend.title=element_blank())
+```

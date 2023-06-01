@@ -1,0 +1,168 @@
+---
+title: "Tutorial for using OpenET Time-series Data in Climate Engine API"
+date: "May 31, 2023"
+output: html_document
+description: "Tutorial for using OpenET Time-series Data in Climate Engine API"
+---
+
+```{r setup, message=FALSE}
+library(tidyverse) # Data processing and visualization
+library(httr) # HTTP API requests
+library(httr2) # HTTP API requests
+library(DT) # Formatting data tables
+library(sf) # Importing shapefile
+library(mapview) # Visualizing shapefile
+```
+
+## Preliminary test
+
+Define Climate Engine API key and run simple endpoint to get key expiration to ensure that the key authenticated correctly:
+
+```{r test}
+# Define root url for Climate Engine API
+root_url <- "https://api.climateengine.org/"
+
+# Define key
+key = 'key_here'
+
+# Define endpoint
+endpoint = '/home/key_expiration'
+
+# Run simple endpoint to get key expiration
+test_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = key))
+print(content(test_r, "text",  encoding = "ISO-8859-1"))
+
+# Clean up unneeded objects
+rm(test_r, endpoint)
+```
+
+## Import field boundaries
+
+These are sample field boundaries, but you can run similar analysis for any shapefile. We will import the field boundaries as an sf object and visualize them on a leaflet map using the mapview package.
+
+```{r}
+# Import the field boundaries shapefile
+fields <- st_read('data/field_boundaries.shp')
+
+# Visualize the fields on a leaflet map
+mapview(fields)
+```
+
+## Select a field to get OpenET data for
+
+Here, we will select an individual field to get OpenET data for and will parse a character string of the coordinates to pass to the API request in the next code chunk.
+
+```{r select-field}
+# Get list of field IDs
+fields_ids <- fields$FieldID
+
+# Select field to get data for
+field <- fields %>% filter(FieldID == fields_ids[1])
+
+# Function to parse coordinates for API request from sf polygon object (shapefile)
+parse_coordinates <- function(polygon){
+  
+  # Helper function to parse coordinate pair from dataframe
+  get_coord <- function(i){
+    x <- coords_df[i, 1] %>% unlist()
+    y <- coords_df[i, 2] %>% unlist()
+    coord <- paste0('[', x, ',', y, ']')
+    return(coord)
+  }
+  
+  # Concatenate coordinate string from individual coords
+  coords_df <- as_tibble(st_coordinates(field))
+  coords_inner <- paste(map(seq(1, nrow(coords_df)), get_coord) %>% unlist(), collapse = ',')
+  coords_str <- paste0('[[', coords_inner, ']]')
+  
+  return(coords_str)
+}
+
+field_coords <- parse_coordinates(field)
+```
+
+## Make API requests to get OpenET data
+
+```{r request-openet}
+# Define dataset for function below
+dataset = "OPENET_CONUS"
+
+# Make a list of ET Model options — we will loop over these using the function below to return all of the data
+models <- c('et_ensemble_mad', 'et_eemetric','et_ssebop','et_sims','et_geesebal','et_ptjpl','et_disalexi')
+
+# Function to return data frame of OpenET time-series
+get_openet_df <- function(model){
+  
+  print(paste0("Requesting data for ", model))
+  
+  # Define Climate Engine API Point 
+  endpoint <- 'timeseries/native/polygons'
+  
+  # Create list of API parameters for request
+  params = list(
+    dataset = dataset,
+    variable = model,
+    start_date = '2016-01-01',
+    end_date = '2021-12-01',
+    coordinates = field_coords,
+    area_reducer = 'mean')
+
+  # Make API request
+  model_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = key), query = params)
+
+  # Parse JSON returned from API
+  model_r_parse <- content(model_r, "parsed")
+  model_df <- enframe(unlist(model_r_parse[[1]]$Data))
+  model_cols <- model_df$name %>% unique()
+
+  # Function to iterate over "name" values in parsed dataframe and return single column dataframe with those values
+  generate_data_frame <- function(col, df){
+  
+    # Filter for name from parsed API return
+    df_val <- df %>%
+      filter(name == col)
+  
+    # Create output data frame based on name from parsed API return
+    out_df <- tibble(val = df_val$value)
+  
+    # Provide names from parsed API return as column name
+    colnames(out_df) <- c(col)
+  
+    return(out_df)
+  }
+
+  # Map generate_data_frame over list of columns and clean up resulting data frame
+  model_r_df <- map(model_cols, generate_data_frame, model_df) %>%
+    bind_cols() %>%
+    mutate(Date = as.Date(Date),
+           Value = as.numeric(.[[2]]),
+           Variable = paste0(model)) %>%
+    filter(Value > -10) %>%
+    select(-2)
+  
+  return(model_r_df)
+}
+
+# Map OpenET API function over list of models to get timeseries from all models
+openet_df <- map(models, get_openet_df) %>% 
+  bind_rows() # Combine list of dataframes into an individual dataframe
+datatable(openet_df)
+```
+
+## Visualize the OpenET model data
+
+Make simple plots of the OpenET time-series data
+
+```{r visualize-openet}
+# Make a simple plot of the time-series data
+ggplot(data = openet_df)+
+  geom_line(mapping = aes(x = Date, y = Value, color = Variable, size = Variable, alpha = Variable))+
+  labs(title = paste0("OpenET models for field #", field$FieldID %>% unlist()), y = 'Monthly evapotranspiration (mm)') +
+  scale_colour_manual(values = c('et_ensemble_mad' = 'black', 'et_eemetric' = "#F8766D", 'et_ssebop' = "#B79F00", 'et_sims' = "#00BA38", 'et_geesebal' = "#00BFC4", 'et_ptjpl' = "#619CFF", 'et_disalexi' = "#F564E3"), labels = c("Ensemble mean", "eeMETRIC", "SSEBop", "SIMS", "geeSEBAL", "PT-JPL", "DisALEXI"))+
+  scale_size_manual(values = c('et_ensemble_mad' = 1, 'et_eemetric' = 0.5, 'et_ssebop' = 0.5, 'et_sims' = 0.5, 'et_geesebal' = 0.5, 'et_ptjpl' = 0.5, 'et_disalexi' = 0.5), labels = c("Ensemble mean", "eeMETRIC", "SSEBop", "SIMS", "geeSEBAL", "PT-JPL", "DisALEXI"))+
+    scale_alpha_manual(values = c('et_ensemble_mad' = 1, 'et_eemetric' = 0.7, 'et_ssebop' = 0.7, 'et_sims' = 0.7, 'et_geesebal' = 0.7, 'et_ptjpl' = 0.7, 'et_disalexi' = 0.7), labels = c("Ensemble mean", "eeMETRIC", "SSEBop", "SIMS", "geeSEBAL", "PT-JPL", "DisALEXI"))+
+  theme_minimal()+
+  theme(legend.position="bottom",
+        axis.title.x = element_blank(),
+        legend.title=element_blank())
+```

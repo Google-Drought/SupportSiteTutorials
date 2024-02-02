@@ -1,0 +1,225 @@
+---
+title: 'Generating custom stacked barcharts from GridMET Drought data'
+author: "Eric Jensen"
+date: "2024-01-26"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Library the packages we will use in this demo
+```{r}
+library(tidyverse) # because tidyverse is the best <3
+library(sf) # for processing spatial data
+library(httr2) # for Climate Engine API requests
+library(mapview) # for visualizing spatial data
+library(spData) # for US states shapefile
+library(parallel) # optional package for speeding up API requests
+```
+
+## Authenticate to API and run preliminary test
+
+Define Climate Engine API key and run a simple test endpoint to make sure that the key authenticated correctly. The Climate Engine API documentation is published at https://docs.climateengine.org
+
+There are also Climate Engine API tutorials in R and Python here: https://support.climateengine.org/article/42-api-tutorials
+
+The Climate Engine API has a 'Swagger' app for testing and making requests at: https://api.climateengine.org/docs
+
+NOTE: The key below will remain active through February 4, please request a free key to run this in the future: https://docs.climateengine.org/docs/build/html/registration.html
+
+```{r}
+# Define root url for Climate Engine API
+root_url <- 'https://api.climateengine.org/'
+
+# Define key
+key <- 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTcwNTg3ODY2NiwianRpIjoiYmEyYTZmMzMtNjdkOS00ODAzLThiOTQtYWQ0Yjg5NmZjZDJkIiwibmJmIjoxNzA1ODc4NjY2LCJ0eXBlIjoiYWNjZXNzIiwic3ViIjoidUZXM0VmMUxhWmI5U0VhUnRPdzVNUzI2UjBTMiIsImV4cCI6MTcwNzE3NDY2Niwicm9sZXMiOiJ1c2VyIiwidXNlcl9pZCI6InVGVzNFZjFMYVpiOVNFYVJ0T3c1TVMyNlIwUzIifQ.WIQZIn97BpFZorL_n6NGvEi_MHg2qMnIUh9Rm6aOcl0'
+
+# Define endpoint
+endpoint <- '/home/validate_key'
+
+# Run simple endpoint to get key expiration
+test <- request(base_url = paste0(root_url, endpoint)) |>
+  req_headers(Authorization = key) |>
+  req_perform()
+
+print(resp_raw(test))
+
+# Clean up unneeded objects
+rm(test, endpoint)
+```
+
+
+## Import US states and select Colorado as Area of Interest
+
+This section of the notebook runs using the state of Colorado, but you can run similar analysis for any polygon shapefile (if you are using multipolygons, you will need to modify the next step by parsing coordinates slightly differently). We will import the us_states layer from the spData package as an sf object and then visualize the it on a leaflet map using the mapview package. 
+
+```{r}
+# Import us_states from spData package
+data(us_states)
+
+# Subset us_states for Colorado
+aoi <- us_states |>
+  filter(NAME == 'Colorado')
+
+mapview(aoi)
+rm(us_states)
+```
+
+### Parse coordinates from Colorado AOI to pass to API endpoint
+
+Here we will extract the coordinates from the AOI polygon (Colorado) and parse it into a list of coordinates that the API will recognize. The coordinate pattern used by the Climate Engine API is consistent with the RFC 7946 standard and is the standard for the GeoJSON file format.
+
+```{r}
+# Get coordinates of polygon and parse to list of coordinates
+coords_matrix <- st_coordinates(aoi)
+x <- coords_matrix[,1]
+y <- coords_matrix[,2]
+coords_str <- as.character()
+for (i in seq(1, length(x))){
+  coords_str <- paste0(coords_str, '[', as.character(x[i]), ',', as.character(y[i]), '],')
+}
+coords_str <- paste0('[[', str_sub(coords_str, 1, -2), ']]')
+
+rm(coords_matrix, x, y, i)
+```
+
+
+### Fetch 180-day SPEI data from gridMET Drought.
+
+Here, we will get histograms of 180-day SPEI drought data based on accepted drought categories developed by NOAA NIDIS (drought.gov). This will allow us to make a beautiful stacked bar chart to depict the drought history for our AOI. You can learn more about drought indicators and how the Climate Engine team is helping the BLM to assess drought on our support site: https://support.climateengine.org/article/128-rangeland-drought-assessment
+
+In this section we'll be using the # Documentation for this endpoint found here 'zonal_stats/pixel_count/polygons' API endpoint. More information: https://docs.climateengine.org/docs/build/html/zonal_statistics.html#rst-zonal-stats-pixel-count-custom-asset
+
+NOTE: It may take about ten minutes to retrieve all of the data for the figure.
+
+```{r}
+# Generate a date list to extract drought statistics over
+start_year = 2015
+end_year = 2023
+yearlist = seq(from = start_year, to = end_year, by = 1)
+
+# Loop over the yearlist to generate a list of dates for each year from 2015-2023
+dates = list()
+for (year in yearlist){
+  dates_year <- seq(from = as.Date(paste0(as.character(year), "/1/5")), to = as.Date(paste0(as.character(year), "/12/31")), by = '5 days')
+  dates <- c(dates, as.character(dates_year))
+  }
+rm(year, yearlist, dates_year, end_year, start_year)
+
+# Documentation on the gridMET Drought is available here: https://support.climateengine.org/article/45-gridmet-drought
+# API Documentation on the gridMET Drought: https://docs.climateengine.org/docs/build/html/variables.html#rst-gridmet-drought
+# Generate dataframe of histograms
+get_drought_histogram <- function(date){
+
+  print(paste0('Running ', date))
+
+  # Create list of API parameters for request
+  params = list(
+    dataset = 'GRIDMET_DROUGHT',
+    variable = 'spei180d',
+    end_date = as.character(date),
+    area_reducer = 'mean',
+    coordinates = coords_str,
+    bins = '[-2, -1.5, -1.2,-0.7, -0.5, 0.5, 0.7, 1.2, 1.5, 2]')
+
+  # Make API request and get data from response
+  data <- request(base_url = paste0(root_url, 'zonal_stats/pixel_count/polygons')) |>
+    req_url_query(query = !!!params) |>
+    req_headers(Authorization = key) |>
+    req_perform() |>
+    resp_body_json() |>
+    pluck(1)
+
+  # Iterate over the SPEI histogram bins to produce dataframe of SPEI histograms
+  bins = names(data$spei180d)
+  row_df <- tibble('Date' = date)
+  for (bin in bins){
+    val = data$spei180d[bin][1] |>
+      unlist() |>
+      unname()
+    df = tibble(bin = val)
+    names(df) <- bin
+    row_df = bind_cols(row_df, df)}
+
+  return(row_df) }
+
+spei_df <- purrr::map(dates, get_drought_histogram) |>
+  bind_rows() %>%
+  mutate(across(everything(), replace_na, 0))
+```
+
+#### Create a stacked barchart of the 180-day SPEI drought categories for the AOI
+
+In the code below we will prepare the dataframe of drought histograms that we produced in the last section for visualization. First, we will pivot the dataframe from wide to long; then, we will calculate the percentage of the area of interest that is in each drought category for each date; last, we will order the categories in the correct order to match the figure referenced at the beginning of this case study.
+
+Preparing the 180-day SPEI data
+
+```{r}
+# Read in the 180-day SPEI data CSV
+names(spei_df) <- c("Date", "1",	"2",	"3",	"4",	"5",	"0",	"-1",	"-2",	"-3",	"-4",	"-5",	"null")
+# Clean and prepare the data for plotting the stacked bar chart
+spei_df_new <- spei_df |> 
+  mutate(Date = as.Date(Date)) |> # The date needs to be a date object for the plot
+  pivot_longer(!Date, names_to = 'Category', values_to = 'Count') |> # pivot from wide to long dataframe for plotting
+  group_by(Date) |>
+  mutate(Pixels = sum(Count)) |> # calculate sum of pixels for each date for generating histogram
+  ungroup() |>
+  mutate(Category = factor(Category, levels = c('0', '-1', '-2', '-3', '-4', '-5', '1', '2', '3', '4', '5'))) |> # convert Drought Category to a factor for plotting
+  mutate(Percent = (Count/Pixels) * 100) |> # calculate percent of pixels in each class for generating histogram
+  filter(Category %in% c('0', '-1', '-2', '-3', '-4', '-5')) # filter for drought categories
+spei_df
+```
+
+
+Plotting the 180-day SPEI data in ggplot2
+
+``` {r warning = FALSE}
+# make a figure to display SPEI in the sandy ESG
+spei_plot <- ggplot(spei_df, mapping = aes(x = Date, y = Percent, fill = Category))+
+            geom_bar(stat = 'identity', width = 10)+
+             scale_fill_manual(values = c('0' = '#FFFFFF', '-1' = '#FEFE33', '-2' = '#FFD580', '-3' = '#FFA500', '-4' = '#DC143C', '-5' = '#8C000F'), # define drought category colors according to NDMC: https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx
+                              labels = c('No drought', 'Abnormally\ndry', 'Moderate', 'Severe', 'Extreme', 'Exceptional'))+ # define drought category names according to NDMC: https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx
+            scale_y_continuous(breaks=c(0, 20, 40, 60, 80, 100), expand = c(0, 0)) +
+  scale_x_date(expand = c(0, 0)) +  # the expand gets rid of gaps between x and y axis lines and the data 
+            labs(title = '180-day SPEI Timeseries Plot for Sandy ESG', x = '', y = 'Percent', fill = 'Drought\nCategory')+
+            theme_classic()+
+            theme(legend.key=element_rect(colour="grey"))
+
+spei_plot
+```
+
+#### Create summary tables of 180-day SPEI data
+
+Often, you'll want to provide a summary of drought or vegetation data for a publication, report, or presentation. Here, we'll take the same SPEI data we exported to create tables of yearly maximum and mean drought extent across the Sandy ESG area.
+
+First, as always, we need to prepare the data
+
+```{r}
+# Clean and prepare data for summary table
+spei_df_table <- spei_df |>
+  mutate(Pixels = rowSums(across(where(is.numeric)))) |> # calculate total pixels in each row
+  select('Date', 'D0' = '-1', , 'D1' = '-2', 'D2' = '-3', , 'D3' = '-4', 'D4' = '-5', 'Pixels') |> # remove non-drought columns
+  mutate(D0 = ((D0 + D1 + D2 + D3 + D4) / Pixels) * 100,
+         D1 = ((D1 + D2 + D3 + D4) / Pixels) * 100,
+         D2 = ((D2 + D3 + D4) / Pixels) * 100,
+         D3 = ((D3 + D4) / Pixels) * 100,
+         D4 = ((D4) / Pixels) * 100) |> # calculate new columns for the total area in class or in more severe class as percentage
+  mutate(Year = as.numeric(stringr::str_extract(Date, "^\\d{4}"))) |> # create new column for year to group_by
+  group_by(Year) # calculate maximum and average areas in drought by year for each category
+
+spei_df_table
+```
+
+Now, we can use another of the summarize functions to produce clean tables of yearly mean and maximum drought extent across the Sandy ESG
+
+``` {r}  
+# Get average area in each drought category (or greater) during each year and round to two decimals
+spei_df_mean_table <- summarize_at(spei_df_table, c('D0', 'D1', 'D2', 'D3', 'D4'), ~round(mean(.), 2))
+spei_df_mean_table
+
+# Get maximum area in each drought category (or greater) during each year and round to two decimals
+spei_df_max_table <- summarize_at(spei_df_table, c('D0', 'D1', 'D2', 'D3', 'D4'), ~round(max(.), 2))
+spei_df_max_table
+```

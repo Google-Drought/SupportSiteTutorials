@@ -183,7 +183,7 @@ spei_plot <- ggplot(spei_df, mapping = aes(x = Date, y = Percent, fill = Categor
                               labels = c('No drought', 'Abnormally\ndry', 'Moderate', 'Severe', 'Extreme', 'Exceptional'))+ # define drought category names according to NDMC: https://droughtmonitor.unl.edu/About/AbouttheData/DroughtClassification.aspx
             scale_y_continuous(breaks=c(0, 20, 40, 60, 80, 100), expand = c(0, 0)) +
   scale_x_date(expand = c(0, 0)) +  # the expand gets rid of gaps between x and y axis lines and the data 
-            labs(title = '180-day SPEI Timeseries Plot for Sandy ESG', x = '', y = 'Percent', fill = 'Drought\nCategory')+
+            labs(title = '180-day SPEI Timeseries Plot for Colorado', x = '', y = 'Percent', fill = 'Drought\nCategory')+
             theme_classic()+
             theme(legend.key=element_rect(colour="grey"))
 

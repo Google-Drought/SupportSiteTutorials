@@ -33,17 +33,15 @@ The Climate Engine API has a 'Swagger' app for testing and making requests at: h
 
 To request an API key, contact the Climate Engine team at support.climateengine.org.
 
-```{r echo=FALSE}
-# Define key
-key <- 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTcwMTM2ODMzMywianRpIjoiMDE3ZDgxNDAtNjlkMy00OTIyLWJmMGEtZThkMWU1NjJlOTQ3IiwibmJmIjoxNzAxMzY4MzMzLCJ0eXBlIjoiYWNjZXNzIiwic3ViIjoiSXJ1TEJGQTkxQ1F4cDl0eW43QkloM09SMlZwMiIsImV4cCI6MTAzNDEzNjgzMzMsInJvbGVzIjoidXNlciIsInVzZXJfaWQiOiJJcnVMQkZBOTFDUXhwOXR5bjdCSWgzT1IyVnAyIn0.kfoZeNoCZpGPm-tsSXUcGlSBGrN9RxjYnDg8KohObeY'
-```
-
 ```{r}
 # Define root url for Climate Engine API
 root_url <- 'https://api.climateengine.org/'
 
 # Define endpoint
 endpoint <- '/home/validate_key'
+
+# Define key
+key <- 'key_here'
 
 # Run simple endpoint to get key expiration and print result
 test <- request(base_url = paste0(root_url, endpoint)) |>

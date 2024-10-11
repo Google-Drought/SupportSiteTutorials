@@ -23,7 +23,7 @@ Define Climate Engine API key and run simple endpoint to get key expiration to e
 root_url <- "https://api.climateengine.org/"
 
 # Define key
-key = 'key_here'
+key = 'your-key-here'
 
 # Define endpoint
 endpoint = '/home/key_expiration'
@@ -42,7 +42,7 @@ These are sample field boundaries, but you can run similar analysis for any shap
 
 ```{r}
 # Import the field boundaries shapefile
-fields <- st_read('data/field_boundaries.shp')
+fields <- st_read('../data/LTDL_Subset.shp')
 
 # Visualize the fields on a leaflet map
 mapview(fields)
@@ -54,10 +54,10 @@ Here, we will select an individual field to get OpenET data for and will parse a
 
 ```{r select-field}
 # Get list of field IDs
-fields_ids <- fields$FieldID
+fields_ids <- fields$OBJECTID
 
 # Select field to get data for
-field <- fields %>% filter(FieldID == fields_ids[1])
+field <- fields %>% filter(OBJECTID == fields_ids[1])
 
 # Function to parse coordinates for API request from sf polygon object (shapefile)
 parse_coordinates <- function(polygon){
@@ -71,7 +71,7 @@ parse_coordinates <- function(polygon){
   }
   
   # Concatenate coordinate string from individual coords
-  coords_df <- as_tibble(st_coordinates(field))
+  coords_df <- as_tibble(st_coordinates(polygon))
   coords_inner <- paste(map(seq(1, nrow(coords_df)), get_coord) %>% unlist(), collapse = ',')
   coords_str <- paste0('[[', coords_inner, ']]')
   

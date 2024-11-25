@@ -41,7 +41,7 @@ Learn more about drought blends here: https://www.drought.gov/data-maps-tools/mu
 
 ```{r request-ltb}
 # Define endpoint for initial data request
-endpoint <- "/timeseries/native/points"
+endpoint <- "/timeseries/native/coordinates"
 
 # Define API arguments time-series endpoint to get long-term blend data 
 ltb_query <- list(dataset = 'GRIDMET_DROUGHT',
@@ -117,7 +117,7 @@ Learn more about drought blends here: https://www.drought.gov/data-maps-tools/mu
 
 ```{r request-stb}
 # Define endpoint for initial data request
-endpoint <- "/timeseries/native/points"
+endpoint <- "/timeseries/native/coordinates"
 
 # Define API arguments time-series endpoint to get long-term blend data 
 stb_query <- list(dataset = 'GRIDMET_DROUGHT',

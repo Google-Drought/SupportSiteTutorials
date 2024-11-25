@@ -42,7 +42,7 @@ These are sample field boundaries, but you can run similar analysis for any shap
 
 ```{r}
 # Import the field boundaries shapefile
-fields <- st_read('../data/LTDL_Subset.shp')
+fields <- st_read('./data/fields.shp')
 
 # Visualize the fields on a leaflet map
 mapview(fields)
@@ -57,7 +57,7 @@ Here, we will select an individual field to get OpenET data for and will parse a
 fields_ids <- fields$OBJECTID
 
 # Select field to get data for
-field <- fields %>% filter(OBJECTID == fields_ids[1])
+field <- fields %>% filter(OBJECTID == fields_ids[2])
 
 # Function to parse coordinates for API request from sf polygon object (shapefile)
 parse_coordinates <- function(polygon){
@@ -96,7 +96,7 @@ get_openet_df <- function(model){
   print(paste0("Requesting data for ", model))
   
   # Define Climate Engine API Point 
-  endpoint <- 'timeseries/native/polygons'
+  endpoint <- 'timeseries/native/coordinates'
   
   # Create list of API parameters for request
   params = list(

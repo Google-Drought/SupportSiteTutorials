@@ -35,7 +35,7 @@ To request an API key, contact the Climate Engine team at support.climateengine.
 
 ```{r}
 # Define root url for Climate Engine API
-root_url <- 'https://api.climateengine.org/'
+root_url <- 'https://api-staging.climateengine.org/'
 
 # Define endpoint
 endpoint <- '/home/validate_key'
@@ -129,7 +129,7 @@ get_drought_histogram <- function(date){
     bins = '[-2, -1.5, -1.2,-0.7, -0.5, 0.5, 0.7, 1.2, 1.5, 2]')
 
   # Make API request and get data from response
-  data <- request(base_url = paste0(root_url, 'zonal_stats/pixel_count/polygons')) |>
+  data <- request(base_url = paste0(root_url, 'zonal_stats/pixel_count/coordinates')) |>
     req_url_query(query = !!!params) |>
     req_headers(Authorization = key) |>
     req_perform() |>

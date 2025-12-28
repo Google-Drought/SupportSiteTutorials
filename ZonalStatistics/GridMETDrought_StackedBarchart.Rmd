@@ -1,7 +1,7 @@
 ---
 title: 'Generating stacked barcharts from GridMET Drought data'
-author: "Eric Jensen"
-date: "2024-03-04"
+author: "Climate Engine Team"
+date: "2025-12-28"
 output: html_document
 ---
 ```{r setup, include=FALSE}
@@ -35,13 +35,13 @@ To request an API key, contact the Climate Engine team at support.climateengine.
 
 ```{r}
 # Define root url for Climate Engine API
-root_url <- 'https://api-staging.climateengine.org/'
+root_url <- 'https://api.climateengine.org/'
 
 # Define endpoint
 endpoint <- '/home/validate_key'
 
 # Define key
-key <- 'key_here'
+key <- '<key-here>'
 
 # Run simple endpoint to get key expiration and print result
 test <- request(base_url = paste0(root_url, endpoint)) |>
@@ -100,8 +100,8 @@ NOTE: It may take about 5-10 minutes to retrieve all of the data.
 
 ```{r}
 # Generate a date list to extract drought statistics over
-start_year = 2020
-end_year = 2023
+start_year = 2023
+end_year = 2024
 yearlist = seq(from = start_year, to = end_year, by = 1)
 
 # Loop over the yearlist to generate a list of dates for each year from 2015-2023
@@ -134,6 +134,7 @@ get_drought_histogram <- function(date){
     req_headers(Authorization = key) |>
     req_perform() |>
     resp_body_json() |>
+    pluck(2) |>
     pluck(1)
 
   # Iterate over the SPEI histogram bins to produce dataframe of SPEI histograms
@@ -234,3 +235,4 @@ spei_df_max_table <- spei_df_table |>
   summarize_at(c('D0', 'D1', 'D2', 'D3', 'D4'), ~round(max(.), 2))
 spei_df_max_table
 ```
+

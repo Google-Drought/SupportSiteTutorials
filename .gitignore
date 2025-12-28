@@ -1,0 +1,50 @@
+# --- macOS ---
+.DS_Store
+**/.DS_Store
+
+# --- Jupyter ---
+*.ipynb
+.ipynb_checkpoints/
+
+# --- Python bytecode / cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual environments ---
+.env
+.venv
+env/
+venv/
+ENV/
+pip-wheel-metadata/
+
+# --- Package / build ---
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# --- Logs / local data ---
+*.log
+*.sqlite
+*.sqlite3
+*.db
+*.tmp
+
+# --- Tooling ---
+.mypy_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+pytestdebug.log
+
+# --- IDE / Editor ---
+.vscode/
+.idea/
+*.code-workspace
+
+# --- OS / Misc ---
+Thumbs.db

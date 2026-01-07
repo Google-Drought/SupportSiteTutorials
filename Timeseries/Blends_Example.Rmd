@@ -1,6 +1,6 @@
 ---
 title: "Tutorial for using Climate Engine Time-series API"
-date: "May 31, 2023"
+date: "January 7, 2026"
 output: html_document
 description: "Tutorial for using Climate Engine Time-series API"
 ---
@@ -56,6 +56,7 @@ ltb_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = ke
 print(ltb_r)
 ```
 
+
 A status code of 200 indicates that the data was returned successfully. In the next step, we'll unpack the JSON that was returned from the API and convert it to a data frame.
 
 ## Parse time-series data
@@ -65,7 +66,7 @@ Parse time-series of the long-term blend drought data from GridMET DROUGHT from 
 ```{r parse-ltb}
 # Parse JSON returned from API
 ltb_r_parse <- content(ltb_r, "parsed")
-ltb_df <- enframe(unlist(ltb_r_parse[[1]]$Data))
+ltb_df <- enframe(unlist(ltb_r_parse[[2]][[1]]$Data))
 ltb_cols <- ltb_df$name %>% unique()
 
 # Define simple function to iterate over "name" values in parsed dataframe and return single column dataframe with those values
@@ -132,7 +133,7 @@ stb_r <- GET(paste0(root_url, endpoint), config = add_headers(Authorization = ke
 
 # Parse JSON returned from API
 stb_r_parse <- content(stb_r, "parsed")
-stb_df <- enframe(unlist(stb_r_parse[[1]]$Data))
+stb_df <- enframe(unlist(stb_r_parse[[2]][[1]]$Data))
 stb_cols <- stb_df$name %>% unique()
 
 # Map generate_data_frame over list of columns and clean up resulting data frame
@@ -157,7 +158,7 @@ stb_ltb_r_df <- bind_rows(stb_r_df, ltb_r_df) %>%
 
 # ----- Make a simple plot of the time-series data ----- 
 ggplot(data = stb_ltb_r_df)+
-  geom_line(mapping = aes(x = Date, y = Value, color = Variable), size = 0.3)+
+  geom_line(mapping = aes(x = Date, y = Value, color = Variable), linewidth = 0.3)+
   labs(title = "Long-term vs Short-term Drought Blends, GridMET Drought (2000-2023)") +
   theme_minimal()+
   theme(legend.position="bottom",

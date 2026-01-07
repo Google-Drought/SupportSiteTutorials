@@ -1,6 +1,6 @@
 ---
 title: "Tutorial for using OpenET Time-series Data in Climate Engine API"
-date: "May 31, 2023"
+date: "January 7, 2026"
 output: html_document
 description: "Tutorial for using OpenET Time-series Data in Climate Engine API"
 ---
@@ -23,7 +23,7 @@ Define Climate Engine API key and run simple endpoint to get key expiration to e
 root_url <- "https://api.climateengine.org/"
 
 # Define key
-key = 'your-key-here'
+key = 'key_here'
 
 # Define endpoint
 endpoint = '/home/key_expiration'
@@ -112,7 +112,7 @@ get_openet_df <- function(model){
 
   # Parse JSON returned from API
   model_r_parse <- content(model_r, "parsed")
-  model_df <- enframe(unlist(model_r_parse[[1]]$Data))
+  model_df <- enframe(unlist(model_r_parse[[2]][[1]]$Data))
   model_cols <- model_df$name %>% unique()
 
   # Function to iterate over "name" values in parsed dataframe and return single column dataframe with those values
